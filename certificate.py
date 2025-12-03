@@ -125,7 +125,7 @@ def generate_certificate_pdf(
     badge_h = 28 * mm
     badge_x = w - 25 * mm - badge_w
     badge_y = name_y - 34 * mm
-    c.setFillColor(colors.HexColor("#ffffff"))  
+    c.setFillColor(colors.HexColor("#b7f7a7"))  
     c.setStrokeColor(colors.HexColor("#35ff1f"))
     c.setLineWidth(1)
     c.roundRect(badge_x, badge_y, badge_w, badge_h, 6 * mm, stroke=1, fill=1)

@@ -1,8 +1,0 @@
-flask
-pymupdf
-python-dotenv
-requests
-gunicorn
-reportlab
-pillow
-qrcode
