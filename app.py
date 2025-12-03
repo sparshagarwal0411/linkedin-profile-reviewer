@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_file
 import os
 import json
 import traceback
@@ -7,6 +7,7 @@ import re
 import fitz  # PyMuPDF
 import requests
 from dotenv import load_dotenv
+from certificate import generate_certificate_pdf
 
 
 """
@@ -91,6 +92,39 @@ def parse_profile_stats(extracted_text: str) -> dict:
     return {"connections": connections, "followers": followers}
 
 
+def is_likely_linkedin_profile(text: str) -> bool:
+    """
+    Heuristic check to see if the extracted PDF text looks like a LinkedIn profile export.
+    We look for a combination of LinkedIn-specific markers and typical section labels.
+    """
+    lower = text.lower()
+
+    must_have_any = [
+        "linkedin profile",
+        "www.linkedin.com/in/",
+        "linkedin.com/in/",
+        "experience",
+        "about",
+        "recommendations",
+        "skills",
+        "accomplishments",
+    ]
+
+    # Require at least 2 distinct LinkedIn-ish markers
+    hits = 0
+    for marker in must_have_any:
+        if marker in lower:
+            hits += 1
+    if hits < 2:
+        return False
+
+    # Also reject obviously tiny or non-profile documents
+    if len(text.split()) < 80:
+        return False
+
+    return True
+
+
 # ------------------ PROMPT BUILDER ------------------
 def build_prompt(
     extracted_text: str,
@@ -111,7 +145,18 @@ def build_prompt(
     return (
         "You are an expert LinkedIn profile and career coach.\n\n"
         "You will receive the raw text of a LinkedIn profile exported as PDF.\n"
-        "Analyse it for clarity, impact, and alignment with the target role.\n\n"
+        "Analyse it for clarity, impact, and alignment with the target role.\n"
+        "Also infer the profile owner's full name from the text if it is clearly present.\n\n"
+        "SCORING RULES (VERY IMPORTANT):\n"
+        "- Score must be on a realistic, strict 0–100 scale.\n"
+        "- 90–100 = truly exceptional, world‑class LinkedIn profile (very rare, <5% of users).\n"
+        "- 80–89  = strong profile with only minor issues.\n"
+        "- 70–79  = decent but with several clear areas for improvement.\n"
+        "- 60–69  = average profile; needs noticeable improvement.\n"
+        "- 40–59  = weak profile; many important issues.\n"
+        "- 0–39   = very poor or incomplete profile.\n"
+        "Do NOT give high scores just for having content; penalise missing sections, vague descriptions,\n"
+        "weak headlines, no measurable impact, or poor keyword alignment. Be conservative.\n\n"
         "PROFILE TEXT (from PDF):\n"
         "------------------------\n"
         f"{extracted_text}\n"
@@ -121,6 +166,7 @@ def build_prompt(
         "Return ONLY a single valid JSON object, no backticks, no extra text.\n"
         "JSON schema:\n"
         "{\n"
+        '  \"full_name\": string | null,   // inferred profile owner name, or null if unclear\n'
         '  \"score\": number,            // 0-100 overall strength\n'
         '  \"connections\": number | null, // parsed / estimated from profile\n'
         '  \"followers\": number | null,   // parsed / estimated from profile\n'
@@ -182,6 +228,18 @@ def review():
 
     if not extracted_text:
         return jsonify({"error": "No text could be extracted from the PDF."}), 400
+
+    # Basic guard: only proceed if this looks like a LinkedIn profile PDF
+    if not is_likely_linkedin_profile(extracted_text):
+        return (
+            jsonify(
+                {
+                    "error": "This PDF does not look like a LinkedIn profile export.",
+                    "details": "Please upload a PDF downloaded from LinkedIn using the 'Save to PDF' option on your profile page.",
+                }
+            ),
+            400,
+        )
 
     # ----- Parse simple stats and build prompt -----
     stats = parse_profile_stats(extracted_text)
@@ -269,6 +327,39 @@ def review():
             review_json["followers"] = stats.get("followers")
 
     return jsonify({"review": review_json})
+
+
+@app.route("/certificate")
+def certificate():
+    """
+    Generate a PDF certificate for the given score and return it as a download.
+    Frontend will call this with a query param, e.g. /certificate?score=82
+    """
+    score = request.args.get("score", type=int)
+    if score is None:
+        return jsonify({"error": "Missing or invalid 'score' query parameter."}), 400
+
+    # Name inferred by the AI and passed from the frontend; fallback if missing
+    name = request.args.get("name", default="Your LinkedIn Profile").strip() or "Your LinkedIn Profile"
+
+    # Where to store the generated PDF (overwrites on each request, which is fine here)
+    output_path = os.path.join("static", "linkedin_certificate.pdf")
+
+    # For now we use a generic name; you can wire a real user name later if desired.
+    generate_certificate_pdf(
+        name=name,
+        score=score,
+        output_filename=output_path,
+        issuer="LinkedIn AI Reviewer",
+        credits_text="LinkedIn AI Reviewer - Sparsh Agarwal",
+    )
+
+    return send_file(
+        output_path,
+        as_attachment=True,
+        download_name="linkedin_profile_certificate.pdf",
+        mimetype="application/pdf",
+    )
 
 
 if __name__ == "__main__":

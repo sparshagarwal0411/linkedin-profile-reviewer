@@ -420,7 +420,27 @@ textarea:focus {
 .score-value {
   font-size: 2.4rem;
   font-weight: 700;
-  color: #16a34a;
+}
+
+/* Color bands for score */
+.score-value.score-excellent {
+  color: #16a34a; /* green */
+}
+
+.score-value.score-good {
+  color: #22c55e; /* lighter green */
+}
+
+.score-value.score-average {
+  color: #eab308; /* yellow / ochre */
+}
+
+.score-value.score-weak {
+  color: #f97316; /* orange */
+}
+
+.score-value.score-poor {
+  color: #dc2626; /* red */
 }
 
 .score-total {
@@ -444,6 +464,22 @@ textarea:focus {
 
 .profile-stat strong {
   font-weight: 600;
+}
+
+.score-actions {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.score-actions .primary-btn {
+  width: auto;
+  padding-inline: 14px;
+}
+
+.share-btn {
+  font-size: 0.8rem;
 }
 
 .suggestions-card section + section {

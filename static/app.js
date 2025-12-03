@@ -10,8 +10,11 @@ const followersEl = document.getElementById("followersCount");
 const profileStats = document.getElementById("profileStats");
 const scoreCard = document.querySelector(".score-card");
 const introLoader = document.getElementById("introLoader");
+const scoreActions = document.getElementById("scoreActions");
+const downloadCertBtn = document.getElementById("downloadCertificateBtn");
+const shareLinkedInLink = document.getElementById("shareLinkedInLink");
 
-// -------------- Upload + review flow --------------
+
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const fileInput = document.getElementById("pdf");
@@ -67,7 +70,7 @@ form.addEventListener("submit", async (e) => {
   }
 });
 
-// -------------- Dark mode toggle --------------
+
 const THEME_KEY = "linkedin-reviewer-theme";
 
 function applyTheme(theme) {
@@ -94,7 +97,7 @@ function getPreferredTheme() {
 }
 
 if (themeToggle) {
-  // Initial theme load
+
   applyTheme(getPreferredTheme());
 
   themeToggle.addEventListener("click", () => {
@@ -104,26 +107,84 @@ if (themeToggle) {
     try {
       window.localStorage.setItem(THEME_KEY, nextTheme);
     } catch {
-      // ignore storage errors
+      
     }
   });
 }
 
-// -------------- Render review --------------
-function renderReview(review) {
-  // Score
-  scoreEl.textContent =
-    typeof review.score === "number" ? String(review.score) : "—";
 
-  // Simple score animation
+function renderReview(review) {
+
+  const hasNumericScore = typeof review.score === "number";
+  scoreEl.textContent = hasNumericScore ? String(review.score) : "—";
+
+
+  if (scoreEl) {
+    scoreEl.classList.remove(
+      "score-excellent",
+      "score-good",
+      "score-average",
+      "score-weak",
+      "score-poor"
+    );
+    if (hasNumericScore) {
+      const s = review.score;
+      if (s >= 90) {
+        scoreEl.classList.add("score-excellent");
+      } else if (s >= 80) {
+        scoreEl.classList.add("score-good");
+      } else if (s >= 70) {
+        scoreEl.classList.add("score-average");
+      } else if (s >= 50) {
+        scoreEl.classList.add("score-weak");
+      } else {
+        scoreEl.classList.add("score-poor");
+      }
+    }
+  }
+
+
+  const fullName =
+    typeof review.full_name === "string" && review.full_name.trim()
+      ? review.full_name.trim()
+      : "Your LinkedIn Profile";
+
+  
+  if (scoreActions) {
+    scoreActions.hidden = !hasNumericScore;
+  }
+
+  if (hasNumericScore) {
+    const scoreValue = review.score;
+
+    if (downloadCertBtn) {
+      downloadCertBtn.onclick = () => {
+        const url = `/certificate?score=${encodeURIComponent(
+          scoreValue
+        )}&name=${encodeURIComponent(fullName)}`;
+        window.open(url, "_blank");
+      };
+    }
+
+    if (shareLinkedInLink) {
+      const shareText = `I just scored ${scoreValue}/100 on my LinkedIn profile using this AI LinkedIn Profile Reviewer!`;
+      const pageUrl = window.location.origin;
+      const encodedUrl = encodeURIComponent(pageUrl);
+      const encodedSummary = encodeURIComponent(shareText);
+
+      shareLinkedInLink.href = `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}&mini=true&summary=${encodedSummary}`;
+    }
+  }
+
+  
   if (scoreCard) {
     scoreCard.classList.remove("score-animate");
-    // force reflow to restart animation
+   
     void scoreCard.offsetWidth;
     scoreCard.classList.add("score-animate");
   }
 
-  // Connections / followers (parsed from PDF / model)
+  
   const hasConnections = typeof review.connections === "number";
   const hasFollowers = typeof review.followers === "number";
 
@@ -136,11 +197,11 @@ function renderReview(review) {
     if (followersEl) {
       followersEl.textContent = hasFollowers ? String(review.followers) : "—";
     }
-    // Always show the stats row once we have a review
+    
     profileStats.hidden = false;
   }
 
-  // Suggestions
+ 
   const headline = review.headline || {};
   const about = review.about || {};
   const skills = review.skills || {};
@@ -233,7 +294,7 @@ function renderReview(review) {
   `;
 }
 
-// Copy buttons for main text sections
+
 suggestions.addEventListener("click", async (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
@@ -287,7 +348,7 @@ function escapeHtml(text) {
   });
 }
 
-// -------------- Intro loader --------------
+
 if (introLoader) {
   window.addEventListener("load", () => {
     setTimeout(() => {
