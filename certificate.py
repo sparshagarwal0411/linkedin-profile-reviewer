@@ -43,11 +43,10 @@ def make_qr_image(data: str, size: int = 300):
 def draw_decorative_border(c, w, h, margin=20 * mm):
     """Draw a thin decorative border with small corner flourishes."""
 
-    c.setStrokeColor(colors.HexColor("#3310a7"))  # deep slate
+    c.setStrokeColor(colors.HexColor("#3310a7")) 
     c.setLineWidth(3)
     c.roundRect(margin / 2, margin / 2, w - margin, h - margin, 12 * mm, stroke=1, fill=0)
 
-    # inner thin rect
     c.setLineWidth(1)
     inset = 12
     c.setStrokeColor(colors.HexColor("#13419d"))
@@ -69,6 +68,7 @@ def generate_certificate_pdf(
     verification_url: str = None,  
     credits_text: str = "LinkedIn AI Reviewer - Sparsh Agarwal",
     date: str = None,
+    output_stream: io.BytesIO = None,
 ):
     """
     Generate a certificate PDF with a QR code and credits.
@@ -99,7 +99,11 @@ def generate_certificate_pdf(
 
     page_size = landscape(A4)  
     w, h = page_size
-    c = canvas.Canvas(output_filename, pagesize=page_size)
+
+    if output_stream is not None:
+        c = canvas.Canvas(output_stream, pagesize=page_size)
+    else:
+        c = canvas.Canvas(output_filename, pagesize=page_size)
 
     draw_decorative_border(c, w, h)
 
@@ -121,13 +125,13 @@ def generate_certificate_pdf(
     badge_h = 28 * mm
     badge_x = w - 25 * mm - badge_w
     badge_y = name_y - 34 * mm
-    c.setFillColor(colors.HexColor("#22b470"))  
-    c.setStrokeColor(colors.HexColor("#afe2a9"))
+    c.setFillColor(colors.HexColor("#ffffff"))  
+    c.setStrokeColor(colors.HexColor("#35ff1f"))
     c.setLineWidth(1)
     c.roundRect(badge_x, badge_y, badge_w, badge_h, 6 * mm, stroke=1, fill=1)
 
     c.setFillColor(colors.HexColor("#16a34a"))
-    c.setFont("Helvetica-Bold", 18)
+    c.setFont("Helvetica-Bold", 20)
     c.drawCentredString(badge_x + badge_w / 2, badge_y + 14 * mm, f"{score} / 100")
 
     c.setFillColor(colors.HexColor("#4b5563"))
@@ -194,3 +198,9 @@ def generate_certificate_pdf(
 
     c.showPage()
     c.save()
+
+    if output_stream is not None:
+        output_stream.seek(0)
+        return output_stream.getvalue()
+    
+    return None

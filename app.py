@@ -8,6 +8,7 @@ import fitz  # PyMuPDF
 import requests
 from dotenv import load_dotenv
 from certificate import generate_certificate_pdf
+import io
 
 
 """
@@ -339,28 +340,36 @@ def certificate():
     if score is None:
         return jsonify({"error": "Missing or invalid 'score' query parameter."}), 400
 
-    # Name inferred by the AI and passed from the frontend; fallback if missing
     name = request.args.get("name", default="Your LinkedIn Profile").strip() or "Your LinkedIn Profile"
 
-    # Where to store the generated PDF (overwrites on each request, which is fine here)
-    output_path = os.path.join("static", "linkedin_certificate.pdf")
-
-    # For now we use a generic name; you can wire a real user name later if desired.
-    generate_certificate_pdf(
+    # Create an in-memory buffer and get PDF bytes (safe for readonly / ephemeral filesystems)
+    buffer = io.BytesIO()
+    pdf_bytes = generate_certificate_pdf(
         name=name,
         score=score,
-        output_filename=output_path,
         issuer="LinkedIn AI Reviewer",
         credits_text="LinkedIn AI Reviewer - Sparsh Agarwal",
+        output_stream=buffer,
     )
 
+    if pdf_bytes is None:
+        # Fallback: previous behavior when function saved to disk (shouldn't normally happen now)
+        output_path = os.path.join("static", "linkedin_certificate.pdf")
+        return send_file(
+            output_path,
+            as_attachment=True,
+            download_name="linkedin_profile_certificate.pdf",
+            mimetype="application/pdf",
+        )
+
+    # Stream the in-memory PDF back
+    buffer = io.BytesIO(pdf_bytes)
     return send_file(
-        output_path,
+        buffer,
         as_attachment=True,
         download_name="linkedin_profile_certificate.pdf",
         mimetype="application/pdf",
     )
-
 
 if __name__ == "__main__":
     # debug=True is fine for local development
