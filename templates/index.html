@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LinkedIn Profile Reviewer</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div id="introLoader" class="intro-loader" aria-hidden="true">
+      <div class="loader-content">
+        <div class="loader-logo">
+          <span class="pulse-dot"></span>
+          <span class="pulse-ring"></span>
+        </div>
+        <p>Loading AI LinkedIn Profile …</p>
+      </div>
+    </div>
+
+    <div class="background-orbs" aria-hidden="true">
+      <div class="orb orb-one"></div>
+      <div class="orb orb-two"></div>
+      <div class="orb orb-three"></div>
+    </div>
+
+    <main class="container">
+      <header class="header">
+        <div class="header-left">
+          <h1>AI LinkedIn Profile Reviewer...</h1>
+          <p class="subtitle">
+            Upload your LinkedIn PDF export and get tailored suggestions for a target role.
+          </p>
+        </div>
+        <div class="header-right">
+          <button
+            type="button"
+            id="themeToggle"
+            class="ghost-btn ghost-btn-pill"
+            aria-label="Toggle dark mode"
+          >
+            <span class="theme-icon" aria-hidden="true">🌙</span>
+            <span class="theme-label">Dark mode</span>
+          </button>
+        </div>
+      </header>
+
+      <section class="layout-grid">
+        <section class="card upload-card">
+          <h2 class="card-title">Upload your LinkedIn PDF</h2>
+          <p class="card-subtitle">
+            Drop in your exported profile PDF and optionally tell us your target role. We’ll analyse it and give you an actionable score and tips.
+          </p>
+
+          <form id="uploadForm" class="upload-form">
+            <div class="field">
+              <label for="pdf">LinkedIn PDF export</label>
+              <div class="file-drop">
+                <input
+                  type="file"
+                  id="pdf"
+                  name="pdf"
+                  accept="application/pdf"
+                  required
+                />
+              </div>
+              <p class="field-help">
+                From LinkedIn: <strong>Profile</strong> &gt; <strong>Resources</strong> &gt;
+                <strong>Save to PDF</strong>, then upload the file here.
+              </p>
+            </div>
+
+            <div class="field">
+              <label for="target_role">Target job title (optional)</label>
+              <input
+                type="text"
+                id="target_role"
+                name="target_role"
+                placeholder="e.g. Data Scientist"
+              />
+            </div>
+
+            <button type="submit" class="primary-btn primary-btn-full">
+              Analyse &amp; Score
+            </button>
+
+            <div id="loading" class="loading" hidden>
+              Analysing your profile…
+            </div>
+
+            <div id="errorBox" class="error-box" hidden></div>
+          </form>
+        </section>
+
+        <aside class="card steps-card">
+          <h2 class="card-title">How to upload your LinkedIn PDF</h2>
+          <ol class="steps-list">
+            <li><strong>Open your LinkedIn profile</strong> while logged in.</li>
+            <li>
+              <strong>Click “Resources”</strong> (or the <strong>“Resources”</strong> button)
+              near your profile headline.
+            </li>
+            <li>
+              Choose <strong>“Save to PDF”</strong>. LinkedIn will generate and
+              download a PDF of your profile.
+            </li>
+            <li>
+              <strong>Return here</strong> and drag &amp; drop or select that PDF file
+              in the uploader on the left.
+            </li>
+            <li>
+              Optionally, enter a <strong>target job title</strong> so feedback is
+              tailored to your goal.
+            </li>
+            <li>Click <strong>“Analyse &amp; Score”</strong> and wait for your review.</li>
+          </ol>
+          <figure class="steps-figure">
+            <!-- Replace this image later with your actual illustration/screenshot -->
+            <div class="steps-image-placeholder">
+              <span><img src="/static/steps.jpg" alt="Steps to upload your LinkedIn PDF"></span>
+            </div>
+            <figcaption class="steps-caption">
+              Visual walkthrough of where to find the “Save to PDF” option on LinkedIn.
+            </figcaption>
+          </figure>
+        </aside>
+      </section>
+
+      <section id="result" class="result-grid" hidden>
+        <section class="card score-card">
+          <h2>Overall score</h2>
+          <div id="scoreBox">
+            <span id="score" class="score-value">—</span>
+            <span class="score-total">/100</span>
+          </div>
+          <div id="profileStats" class="profile-stats" hidden>
+            <span class="profile-stat">
+              <strong>Connections:</strong>
+              <span id="connectionsCount">—</span>
+            </span>
+            <span class="profile-stat">
+              <strong>Followers:</strong>
+              <span id="followersCount">—</span>
+            </span>
+          </div>
+          <p class="score-note">
+            Higher scores mean clearer positioning, stronger storytelling, and better keyword alignment.
+          </p>
+          <p class="score-note">
+            A “—” for connections or followers means those counts are hidden or set to private on your LinkedIn profile.
+          </p>
+        </section>
+
+        <section class="card suggestions-card">
+          <h2>Key suggestions you can copy</h2>
+          <div id="suggestions"></div>
+        </section>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <span class="footer-text">Made by <strong>Sparsh Agarwal</strong></span>
+        <span class="footer-links">
+          <span>To connect:</span>
+          <a href="https://www.linkedin.com/in/sparshagarwal0411/" target="_blank" rel="noopener noreferrer"
+            >LinkedIn</a
+          >
+          <span class="footer-separator">•</span>
+          <a href="https://github.com/sparshagarwal0411/" target="_blank" rel="noopener noreferrer">GitHub</a>
+        </span>
+      </div>
+    </footer>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
