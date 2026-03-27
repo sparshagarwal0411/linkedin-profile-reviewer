@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Leaderboard - LinkedIn Profile Reviewer</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <style>
+      .sticker-text {
+        display: inline-block;
+        background-color: #ffd700;
+        color: #000;
+        font-weight: bold;
+        padding: 4px 12px;
+        border-radius: 12px;
+        transform: rotate(-3deg);
+        box-shadow: 2px 2px 0px rgba(0,0,0,0.2);
+        margin-left: 10px;
+        font-size: 0.9em;
+      }
+      .leaderboard-table, .leaderboard-table th, .leaderboard-table td {
+        border-collapse: collapse;
+        padding: 12px;
+        text-align: left;
+      }
+      .leaderboard-table th { border-bottom: 2px solid #ccc; }
+      .leaderboard-table td { border-bottom: 1px solid #eee; }
+    </style>
+  </head>
+  <body>
+    <div class="background-orbs" aria-hidden="true">
+      <div class="orb orb-one"></div>
+      <div class="orb orb-two"></div>
+      <div class="orb orb-three"></div>
+    </div>
+
+    <main class="container">
+      <header class="header">
+        <div class="header-left">
+          <h1>Leaderboard</h1>
+        </div>
+        <div class="header-right">
+          <a href="/" class="ghost-btn ghost-btn-pill">Back to Home</a>
+        </div>
+      </header>
+
+      <section class="card" style="max-width: 600px; margin: 0 auto; margin-top: 40px;">
+         <h2>Top Profiles <span class="sticker-text">NEW!</span></h2>
+         <table class="leaderboard-table" style="width: 100%;">
+           <thead>
+             <tr>
+               <th>Rank</th>
+               <th>Name</th>
+               <th>Score</th>
+             </tr>
+           </thead>
+           <tbody id="leaderboardBody">
+             <tr><td colspan="3">Loading...</td></tr>
+           </tbody>
+         </table>
+      </section>
+    </main>
+    <script>
+       fetch('/api/leaderboard').then(r=>r.json()).then(data=>{
+           const tbody = document.getElementById('leaderboardBody');
+           tbody.innerHTML = '';
+           if(data.error) {
+               tbody.innerHTML = `<tr><td colspan="3">${data.error}</td></tr>`;
+               return;
+           }
+           if (data.leaderboard.length === 0) {
+               tbody.innerHTML = `<tr><td colspan="3">No profiles analyzed yet.</td></tr>`;
+               return;
+           }
+           data.leaderboard.forEach((item, idx) => {
+               const tr = document.createElement('tr');
+               tr.innerHTML = `
+                 <td>#${idx+1}</td>
+                 <td>${item.name || 'Anonymous'}</td>
+                 <td><strong>${item.score}</strong></td>
+               `;
+               tbody.appendChild(tr);
+           });
+       }).catch(err => {
+            const tbody = document.getElementById('leaderboardBody');
+            tbody.innerHTML = `<tr><td colspan="3">Failed to load leaderboard.</td></tr>`;
+       });
+    </script>
+  </body>
+</html>

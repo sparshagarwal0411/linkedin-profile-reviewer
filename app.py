@@ -9,6 +9,7 @@ import requests
 from dotenv import load_dotenv
 from certificate import generate_certificate_pdf
 import io
+from supabase import create_client, Client
 
 
 """
@@ -20,19 +21,29 @@ Simple LinkedIn profile reviewer:
 
 # ------------------ CONFIG / ENV ------------------
 load_dotenv()
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+supabase: Client | None = None
+if SUPABASE_URL and SUPABASE_KEY:
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception as e:
+        print("Failed to initialize Supabase:", e)
+
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB
 
 
 def ensure_api_key():
-    """Return an error response if the Groq API key is missing."""
-    if not GROQ_API_KEY:
+    """Return an error response if the Gemini API key is missing."""
+    if not GEMINI_API_KEY:
         return jsonify(
             {
-                "error": "Missing GROQ_API_KEY environment variable.",
-                "details": "Set GROQ_API_KEY in a .env file or your shell before running the app.",
+                "error": "Missing GEMINI_API_KEY environment variable.",
+                "details": "Set GEMINI_API_KEY in a .env file or your shell before running the app.",
             }
         ), 500
     return None
@@ -198,6 +209,20 @@ def build_prompt(
 def index():
     return render_template("index.html")
 
+@app.route("/leaderboard")
+def leaderboard():
+    return render_template("leaderboard.html")
+
+@app.route("/api/leaderboard", methods=["GET"])
+def get_leaderboard():
+    if not supabase:
+        return jsonify({"error": "Supabase not configured."}), 500
+    try:
+        response = supabase.table("leaderboard").select("*").order("score", desc=True).limit(10).execute()
+        return jsonify({"leaderboard": response.data})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route("/review", methods=["POST"])
 def review():
@@ -246,21 +271,20 @@ def review():
     stats = parse_profile_stats(extracted_text)
     prompt = build_prompt(extracted_text, target_role, stats)
 
-    # ----- Call Groq -----
+    # ----- Call Gemini -----
     try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "responseMimeType": "application/json",
+                "temperature": 0.2
+            }
+        }
         response = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                # Updated model: llama3-8b-8192 is decommissioned
-                "model": "llama-3.1-8b-instant",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.2,
-                "max_tokens": 1800,
-            },
+            url,
+            headers={"Content-Type": "application/json"},
+            json=payload,
             timeout=60,
         )
     except Exception as e:
@@ -268,7 +292,7 @@ def review():
         return (
             jsonify(
                 {
-                    "error": "Failed to contact Groq API.",
+                    "error": "Failed to contact Gemini API.",
                     "details": str(e),
                 }
             ),
@@ -279,7 +303,7 @@ def review():
         return (
             jsonify(
                 {
-                    "error": "Groq API returned a non-200 status.",
+                    "error": "Gemini API returned a non-200 status.",
                     "status": response.status_code,
                     "details": response.text,
                 }
@@ -291,13 +315,13 @@ def review():
 
     try:
         content = (
-            data["choices"][0]["message"]["content"].strip()
-        )  # type: ignore[index]
+            data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        )
     except Exception as e:
         return (
             jsonify(
                 {
-                    "error": "Unexpected Groq response format.",
+                    "error": "Unexpected Gemini response format.",
                     "details": str(e),
                     "raw": data,
                 }
@@ -326,6 +350,16 @@ def review():
             review_json["connections"] = stats.get("connections")
         if "followers" not in review_json or review_json.get("followers") is None:
             review_json["followers"] = stats.get("followers")
+
+        # Save to leaderboard
+        if supabase and review_json.get("full_name") and review_json.get("score"):
+            try:
+                supabase.table("leaderboard").insert({
+                    "name": review_json["full_name"],
+                    "score": review_json["score"]
+                }).execute()
+            except Exception as e:
+                print("Failed to save to leaderboard:", e)
 
     return jsonify({"review": review_json})
 

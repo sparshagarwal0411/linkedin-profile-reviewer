@@ -6,3 +6,4 @@ gunicorn
 reportlab
 pillow
 qrcode
+supabase
