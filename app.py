@@ -315,7 +315,15 @@ def review():
 
     # ----- Parse JSON from model -----
     try:
-        review_json = json.loads(content)
+        # Strip potential markdown code blocks 
+        clean_content = content
+        if clean_content.startswith("```"):
+            lines = clean_content.split("\n")
+            if lines[0].startswith("```"): lines = lines[1:]
+            if lines[-1].startswith("```"): lines = lines[:-1]
+            clean_content = "\n".join(lines).strip()
+            
+        review_json = json.loads(clean_content)
     except Exception as e:
         return (
             jsonify(
@@ -337,10 +345,14 @@ def review():
 
         # Save to leaderboard
         supabase = get_supabase_client()
-        if supabase and review_json.get("full_name") and review_json.get("score"):
+        if supabase and review_json.get("score"):
+            name_to_insert = review_json.get("full_name")
+            if not name_to_insert or str(name_to_insert).strip() == "":
+                name_to_insert = "Anonymous User"
+                
             try:
                 supabase.table("leaderboard").insert({
-                    "name": review_json["full_name"],
+                    "name": name_to_insert,
                     "score": review_json["score"]
                 }).execute()
             except Exception as e:
