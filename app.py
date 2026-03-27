@@ -21,25 +21,21 @@ Simple LinkedIn profile reviewer:
 
 # ------------------ CONFIG / ENV ------------------
 load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-
-supabase: Client | None = None
-if SUPABASE_URL and SUPABASE_KEY:
-    try:
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-    except Exception as e:
-        print("Failed to initialize Supabase:", e)
-
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB
 
+def get_supabase_client():
+    """Lazily load the Supabase client to prevent Vercel Serverless connection freezing."""
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_KEY")
+    if url and key:
+        return create_client(url, key)
+    return None
 
 def ensure_api_key():
     """Return an error response if the Gemini API key is missing."""
-    if not GEMINI_API_KEY:
+    if not os.environ.get("GEMINI_API_KEY"):
         return jsonify(
             {
                 "error": "Missing GEMINI_API_KEY environment variable.",
@@ -201,8 +197,9 @@ def leaderboard():
 
 @app.route("/api/leaderboard", methods=["GET"])
 def get_leaderboard():
+    supabase = get_supabase_client()
     if not supabase:
-        return jsonify({"error": "Supabase not configured."}), 500
+        return jsonify({"error": "Supabase not configured. Check Vercel environment variables."}), 500
     try:
         response = supabase.table("leaderboard").select("*").order("score", desc=True).limit(10).execute()
         return jsonify({"leaderboard": response.data})
@@ -259,7 +256,8 @@ def review():
 
     # ----- Call Gemini -----
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-8b:generateContent?key={GEMINI_API_KEY}"
+        gemini_api_key = os.environ.get("GEMINI_API_KEY")
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_api_key}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
@@ -338,6 +336,7 @@ def review():
             review_json["followers"] = stats.get("followers")
 
         # Save to leaderboard
+        supabase = get_supabase_client()
         if supabase and review_json.get("full_name") and review_json.get("score"):
             try:
                 supabase.table("leaderboard").insert({
