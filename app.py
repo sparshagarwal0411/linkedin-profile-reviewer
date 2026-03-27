@@ -155,24 +155,10 @@ def build_prompt(
         stats_part = "\nParsed network stats from the PDF were not available.\n"
 
     return (
-        "You are an expert LinkedIn profile and career coach.\n\n"
-        "You will receive the raw text of a LinkedIn profile exported as PDF.\n"
-        "Analyse it for clarity, impact, and alignment with the target role.\n"
-        "Also infer the profile owner's full name from the text if it is clearly present.\n\n"
-        "SCORING RULES (VERY IMPORTANT):\n"
-        "- Score must be on a realistic, strict 0–100 scale.\n"
-        "- 90–100 = truly exceptional, world‑class LinkedIn profile (very rare, <5% of users).\n"
-        "- 80–89  = strong profile with only minor issues.\n"
-        "- 70–79  = decent but with several clear areas for improvement.\n"
-        "- 60–69  = average profile; needs noticeable improvement.\n"
-        "- 40–59  = weak profile; many important issues.\n"
-        "- 0–39   = very poor or incomplete profile.\n"
-        "Do NOT give high scores just for having content; penalise missing sections, vague descriptions,\n"
-        "weak headlines, no measurable impact, or poor keyword alignment. Be conservative.\n\n"
-        "PROFILE TEXT (from PDF):\n"
-        "------------------------\n"
-        f"{extracted_text}\n"
-        "------------------------\n"
+        "You are a fast, expert LinkedIn coach.\n"
+        "Analyse this LinkedIn profile text. Be concise and write brief, punchy explanations.\n\n"
+        "SCORING RULES: 0-100 scale. Be conservative. 90+ is rare.\n"
+        f"PROFILE TEXT:\n{extracted_text[:2500]}\n"  # Truncate text to 2500 chars to speed up processing
         f"{role_part}\n"
         f"{stats_part}\n"
         "Return ONLY a single valid JSON object, no backticks, no extra text.\n"
@@ -273,12 +259,12 @@ def review():
 
     # ----- Call Gemini -----
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-8b:generateContent?key={GEMINI_API_KEY}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
                 "responseMimeType": "application/json",
-                "temperature": 0.2
+                "temperature": 0.1
             }
         }
         response = requests.post(

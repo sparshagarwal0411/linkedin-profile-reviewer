@@ -1,4 +1,4 @@
-,*,
+*,
 *::before,
 *::after {
   box-sizing: border-box;
@@ -482,25 +482,73 @@ textarea:focus {
   font-size: 0.8rem;
 }
 
-.suggestions-card section + section {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed #e5e7eb33;
+.suggestions-card {
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
-.suggestion-block + .suggestion-block {
-  margin-top: 14px;
+.suggestions-card > h2 {
+  margin-bottom: 20px;
+  font-size: 1.5rem;
+  color: var(--text-main);
+}
+
+.suggestion-block {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-soft);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.suggestion-block:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 24px rgba(79, 70, 229, 0.15);
+  border-color: rgba(79, 70, 229, 0.4);
+}
+
+.suggestion-block h3 {
+  margin-top: 0;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.2rem;
+}
+
+.suggestion-block h3::before {
+  content: '✨';
+  font-size: 1.2rem;
+}
+
+.card-header-row {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .suggestion-main {
-  margin: 4px 0 6px;
-  line-height: 1.4;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: var(--text-main);
+  background: var(--bg-muted);
+  padding: 16px;
+  border-left: 4px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  margin: 10px 0 14px;
 }
 
 .suggestion-note {
   margin: 0;
-  font-size: 0.84rem;
+  font-size: 0.9rem;
   color: var(--text-subtle);
+  background: rgba(99, 102, 241, 0.05);
+  padding: 12px;
+  border-radius: 8px;
 }
 
 .posts-card {
