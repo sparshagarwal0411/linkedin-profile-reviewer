@@ -75,21 +75,30 @@ form.addEventListener("submit", async (e) => {
       body: formData,
     });
 
-    let data;
-    try {
-      data = await res.json();
-    } catch {
-      throw { error: "Server returned an invalid response." };
+    const rawText = await res.text();
+    let data = null;
+    if (rawText) {
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = null;
+      }
     }
 
     if (!res.ok) {
-      const msg =
+      const serverMsg =
         data && data.error
-          ? `${data.error}${
-              data.details ? ` – ${String(data.details).slice(0, 300)}` : ""
-            }`
-          : "Review failed. Please try again.";
-      throw new Error(msg);
+          ? `${data.error}${data.details ? ` – ${String(data.details).slice(0, 300)}` : ""}`
+          : null;
+      const fallback =
+        rawText && rawText.trim()
+          ? `Server error (${res.status}). Response: ${rawText.trim().slice(0, 300)}`
+          : `Server error (${res.status}).`;
+      throw new Error(serverMsg || fallback);
+    }
+
+    if (!data || typeof data !== "object") {
+      throw new Error("Server returned a non-JSON success response.");
     }
 
     const review = data.review;
