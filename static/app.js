@@ -16,6 +16,9 @@ const downloadCertBtn = document.getElementById("downloadCertificateBtn");
 const shareLinkedInLink = document.getElementById("shareLinkedInLink");
 const scoreBreakdownEl = document.getElementById("scoreBreakdown");
 const hireProbBanner = document.getElementById("hireProbBanner");
+const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
+const fileDrop = document.querySelector(".file-drop");
+const backToTopBtn = document.getElementById("backToTopBtn");
 
 const LOADING_MESSAGES = [
   "Analyzing your profile…",
@@ -45,6 +48,53 @@ function stopLoadingMessages() {
   }
 }
 
+function scrollToScoreCard() {
+  const scoreSection = document.querySelector(".score-card");
+  if (!scoreSection) return;
+  scoreSection.scrollIntoView({
+    behavior: "smooth",
+    block: "start",
+  });
+}
+
+function bindFileDropEffects() {
+  const fileInput = document.getElementById("pdf");
+  if (!fileDrop || !fileInput) return;
+
+  const setDrag = (active) => {
+    fileDrop.classList.toggle("drag-over", active);
+  };
+
+  ["dragenter", "dragover"].forEach((eventName) => {
+    fileDrop.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      setDrag(true);
+    });
+  });
+
+  ["dragleave", "drop"].forEach((eventName) => {
+    fileDrop.addEventListener(eventName, () => {
+      setDrag(false);
+    });
+  });
+}
+
+function bindBackToTop() {
+  if (!backToTopBtn) return;
+
+  const onScroll = () => {
+    const shouldShow = window.scrollY > 500;
+    backToTopBtn.classList.toggle("show", shouldShow);
+  };
+
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  backToTopBtn.addEventListener("click", () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
+
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const fileInput = document.getElementById("pdf");
@@ -61,6 +111,7 @@ form.addEventListener("submit", async (e) => {
 
   loading.hidden = false;
   startLoadingMessages();
+  if (submitBtn) submitBtn.disabled = true;
   result.hidden = true;
 
   const formData = new FormData();
@@ -104,6 +155,7 @@ form.addEventListener("submit", async (e) => {
     const review = data.review;
     renderReview(review);
     result.hidden = false;
+    scrollToScoreCard();
   } catch (err) {
     console.error(err);
     const message =
@@ -112,6 +164,7 @@ form.addEventListener("submit", async (e) => {
   } finally {
     stopLoadingMessages();
     loading.hidden = true;
+    if (submitBtn) submitBtn.disabled = false;
   }
 });
 
@@ -637,3 +690,6 @@ if (introLoader) {
     }, 2400);
   });
 }
+
+bindFileDropEffects();
+bindBackToTop();

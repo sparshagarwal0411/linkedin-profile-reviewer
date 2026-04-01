@@ -66,6 +66,13 @@ def select_benchmark_context(target_role: str | None) -> str:
     return "\n".join(lines)
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB
 
+
+def json_error(message: str, status: int = 500, **extra):
+    """Return a consistent JSON error payload."""
+    payload = {"error": message}
+    payload.update(extra)
+    return jsonify(payload), status
+
 def get_supabase_client():
     """Lazily load the Supabase client to prevent Vercel Serverless connection freezing."""
     url = os.environ.get("SUPABASE_URL")
@@ -411,166 +418,156 @@ def get_leaderboard():
 def review():
     if request.method == "GET":
         return redirect(url_for("index"))
-
-    # Ensure API key exists first
-    key_error = ensure_api_key()
-    if key_error:
-        return key_error
-
-    file = request.files.get("pdf")
-    target_role = request.form.get("target_role", "").strip() or None
-    experience_level = request.form.get("experience_level", "").strip() or None
-    dream_companies = request.form.get("dream_companies", "").strip() or None
-
-    if not file:
-        return jsonify({"error": "No file uploaded."}), 400
-
-    # ----- PDF extraction -----
     try:
-        extracted_text = extract_text_from_pdf(file)
-    except Exception as e:
-        traceback.print_exc()
-        return (
-            jsonify(
-                {
-                    "error": "Failed to parse PDF.",
-                    "details": str(e),
-                }
-            ),
-            500,
+        # Ensure API key exists first
+        key_error = ensure_api_key()
+        if key_error:
+            return key_error
+
+        file = request.files.get("pdf")
+        target_role = request.form.get("target_role", "").strip() or None
+        experience_level = request.form.get("experience_level", "").strip() or None
+        dream_companies = request.form.get("dream_companies", "").strip() or None
+
+        if not file:
+            return json_error("No file uploaded.", 400)
+
+        # ----- PDF extraction -----
+        try:
+            extracted_text = extract_text_from_pdf(file)
+        except Exception as e:
+            traceback.print_exc()
+            return json_error("Failed to parse PDF.", 500, details=str(e))
+
+        if not extracted_text:
+            return json_error("No text could be extracted from the PDF.", 400)
+
+        # Basic guard: only proceed if this looks like a LinkedIn profile PDF
+        if not is_likely_linkedin_profile(extracted_text):
+            return json_error(
+                "This PDF does not look like a LinkedIn profile export.",
+                400,
+                details="Please upload a PDF downloaded from LinkedIn using the 'Save to PDF' option on your profile page.",
+            )
+
+        # ----- Parse simple stats and build prompt -----
+        stats = parse_profile_stats(extracted_text)
+        prompt = build_prompt(
+            extracted_text,
+            target_role,
+            experience_level,
+            dream_companies,
+            stats,
         )
 
-    if not extracted_text:
-        return jsonify({"error": "No text could be extracted from the PDF."}), 400
-
-    # Basic guard: only proceed if this looks like a LinkedIn profile PDF
-    if not is_likely_linkedin_profile(extracted_text):
-        return (
-            jsonify(
-                {
-                    "error": "This PDF does not look like a LinkedIn profile export.",
-                    "details": "Please upload a PDF downloaded from LinkedIn using the 'Save to PDF' option on your profile page.",
+        # ----- Call Gemini -----
+        try:
+            gemini_api_key = os.environ.get("GEMINI_API_KEY")
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_api_key}"
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "responseMimeType": "application/json",
+                    "temperature": 0.1
                 }
-            ),
-            400,
-        )
-
-    # ----- Parse simple stats and build prompt -----
-    stats = parse_profile_stats(extracted_text)
-    prompt = build_prompt(
-        extracted_text,
-        target_role,
-        experience_level,
-        dream_companies,
-        stats,
-    )
-
-    # ----- Call Gemini -----
-    try:
-        gemini_api_key = os.environ.get("GEMINI_API_KEY")
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_api_key}"
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "responseMimeType": "application/json",
-                "temperature": 0.1
             }
-        }
-        response = requests.post(
-            url,
-            headers={"Content-Type": "application/json"},
-            json=payload,
-            timeout=60,
-        )
+            response = requests.post(
+                url,
+                headers={"Content-Type": "application/json"},
+                json=payload,
+                timeout=60,
+            )
+        except Exception as e:
+            traceback.print_exc()
+            return json_error("Failed to contact Gemini API.", 500, details=str(e))
+
+        if response.status_code != 200:
+            return json_error(
+                "Gemini API returned a non-200 status.",
+                500,
+                status=response.status_code,
+                details=response.text,
+            )
+
+        try:
+            data = response.json()
+        except Exception as e:
+            return json_error(
+                "Gemini API returned non-JSON response.",
+                500,
+                details=str(e),
+                raw=(response.text or "")[:1000],
+            )
+
+        try:
+            content = (
+                data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            )
+        except Exception as e:
+            return json_error(
+                "Unexpected Gemini response format.",
+                500,
+                details=str(e),
+                raw=data,
+            )
+
+        # ----- Parse JSON from model -----
+        try:
+            # Strip potential markdown code blocks
+            clean_content = content
+            if clean_content.startswith("```"):
+                lines = clean_content.split("\n")
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                clean_content = "\n".join(lines).strip()
+
+            review_json = json.loads(clean_content)
+            review_json = normalize_review_json(review_json)
+        except Exception as e:
+            return json_error(
+                "Model output was not valid JSON.",
+                500,
+                details=str(e),
+                raw=content,
+            )
+
+        # Ensure parsed stats are present even if the model omits them
+        if isinstance(review_json, dict):
+            if "connections" not in review_json or review_json.get("connections") is None:
+                review_json["connections"] = stats.get("connections")
+            if "followers" not in review_json or review_json.get("followers") is None:
+                review_json["followers"] = stats.get("followers")
+
+            # Save to leaderboard
+            try:
+                supabase = get_supabase_client()
+            except Exception as e:
+                supabase = None
+                print("Failed to initialize supabase client:", e)
+
+            if supabase and review_json.get("score"):
+                name_to_insert = review_json.get("full_name")
+                if not name_to_insert or str(name_to_insert).strip() == "":
+                    name_to_insert = "Anonymous User"
+
+                try:
+                    supabase.table("leaderboard").insert({
+                        "name": name_to_insert,
+                        "score": review_json["score"]
+                    }).execute()
+                except Exception as e:
+                    print("Failed to save to leaderboard:", e)
+
+        return jsonify({"review": review_json})
     except Exception as e:
         traceback.print_exc()
-        return (
-            jsonify(
-                {
-                    "error": "Failed to contact Gemini API.",
-                    "details": str(e),
-                }
-            ),
+        return json_error(
+            "Unhandled server error while processing review.",
             500,
+            details=str(e),
         )
-
-    if response.status_code != 200:
-        return (
-            jsonify(
-                {
-                    "error": "Gemini API returned a non-200 status.",
-                    "status": response.status_code,
-                    "details": response.text,
-                }
-            ),
-            500,
-        )
-
-    data = response.json()
-
-    try:
-        content = (
-            data["candidates"][0]["content"]["parts"][0]["text"].strip()
-        )
-    except Exception as e:
-        return (
-            jsonify(
-                {
-                    "error": "Unexpected Gemini response format.",
-                    "details": str(e),
-                    "raw": data,
-                }
-            ),
-            500,
-        )
-
-    # ----- Parse JSON from model -----
-    try:
-        # Strip potential markdown code blocks 
-        clean_content = content
-        if clean_content.startswith("```"):
-            lines = clean_content.split("\n")
-            if lines[0].startswith("```"): lines = lines[1:]
-            if lines[-1].startswith("```"): lines = lines[:-1]
-            clean_content = "\n".join(lines).strip()
-            
-        review_json = json.loads(clean_content)
-        review_json = normalize_review_json(review_json)
-    except Exception as e:
-        return (
-            jsonify(
-                {
-                    "error": "Model output was not valid JSON.",
-                    "details": str(e),
-                    "raw": content,
-                }
-            ),
-            500,
-        )
-
-    # Ensure parsed stats are present even if the model omits them
-    if isinstance(review_json, dict):
-        if "connections" not in review_json or review_json.get("connections") is None:
-            review_json["connections"] = stats.get("connections")
-        if "followers" not in review_json or review_json.get("followers") is None:
-            review_json["followers"] = stats.get("followers")
-
-        # Save to leaderboard
-        supabase = get_supabase_client()
-        if supabase and review_json.get("score"):
-            name_to_insert = review_json.get("full_name")
-            if not name_to_insert or str(name_to_insert).strip() == "":
-                name_to_insert = "Anonymous User"
-                
-            try:
-                supabase.table("leaderboard").insert({
-                    "name": name_to_insert,
-                    "score": review_json["score"]
-                }).execute()
-            except Exception as e:
-                print("Failed to save to leaderboard:", e)
-
-    return jsonify({"review": review_json})
 
 
 @app.route("/certificate")

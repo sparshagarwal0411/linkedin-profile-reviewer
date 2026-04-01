@@ -42,6 +42,7 @@
   --shadow-soft: 0 22px 60px rgba(15, 23, 42, 0.9);
   --shadow-strong: 0 20px 60px rgba(79, 70, 229, 0.7);
   --shadow-pill: 0 10px 30px rgba(79, 70, 229, 0.6);
+  color-scheme: dark;
 }
 
 body {
@@ -184,6 +185,31 @@ body {
   color: var(--text-subtle);
 }
 
+.back-to-top {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  border: none;
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  box-shadow: 0 8px 26px rgba(79, 70, 229, 0.4);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px);
+  transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+  z-index: 20;
+}
+
+.back-to-top.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
 .footer-inner {
   max-width: 1100px;
   margin: 0 auto;
@@ -219,6 +245,11 @@ body {
 h1 {
   margin: 0;
   font-size: 1.9rem;
+  letter-spacing: -0.02em;
+  background: linear-gradient(120deg, #4f46e5, #8b5cf6 55%, #0ea5e9);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .subtitle {
@@ -241,6 +272,13 @@ h1 {
   box-shadow: var(--shadow-soft);
   border: 1px solid var(--border-soft);
   backdrop-filter: blur(12px);
+  transition: transform 0.18s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 16px 38px rgba(30, 41, 59, 0.16);
 }
 
 .upload-card {
@@ -279,6 +317,13 @@ label {
   border-radius: 10px;
   border: 1px dashed var(--border-strong);
   background: var(--bg-muted);
+  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
+}
+
+.file-drop.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  transform: scale(1.01);
 }
 
 input[type="file"],
@@ -295,7 +340,29 @@ textarea {
 }
 
 select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
   cursor: pointer;
+  padding-right: 36px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-subtle) 50%),
+    linear-gradient(135deg, var(--text-subtle) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 2px),
+    calc(100% - 12px) calc(50% - 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
+select option {
+  color: #111827;
+  background: #ffffff;
+}
+
+.dark-theme select option {
+  color: #e5e7eb;
+  background: #0f172a;
 }
 
 textarea {
@@ -362,6 +429,13 @@ textarea:focus {
   box-shadow: 0 8px 20px rgba(79, 70, 229, 0.35);
 }
 
+.primary-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+  filter: grayscale(0.1);
+  box-shadow: none;
+}
+
 .loading {
   margin-top: 10px;
   font-size: 0.95rem;
@@ -391,12 +465,21 @@ textarea:focus {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.85fr);
   gap: 16px;
+  scroll-margin-top: 14px;
 }
 
 .score-card {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+@media (min-width: 1024px) {
+  .score-card {
+    position: sticky;
+    top: 14px;
+    align-self: start;
+  }
 }
 
 .card-header-row {
@@ -839,6 +922,16 @@ textarea:focus {
   font-size: 0.8rem;
   cursor: pointer;
   color: var(--text-main);
+  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.08s ease;
+}
+
+.ghost-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.ghost-btn:active {
+  transform: translateY(1px);
 }
 
 .ghost-btn-pill {
@@ -1008,5 +1101,16 @@ textarea:focus {
 
   .intro-loader {
     padding: 0 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
