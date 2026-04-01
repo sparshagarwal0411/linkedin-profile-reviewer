@@ -4,6 +4,7 @@ import json
 import traceback
 import re
 from datetime import datetime, timezone
+from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 
 import fitz  # PyMuPDF
 import requests
@@ -74,6 +75,14 @@ def json_error(message: str, status: int = 500, **extra):
     payload = {"error": message}
     payload.update(extra)
     return jsonify(payload), status
+
+
+def wants_json_error() -> bool:
+    path = (request.path or "").lower()
+    if path.startswith("/api/") or path == "/review":
+        return True
+    accepted = request.headers.get("Accept", "")
+    return "application/json" in accepted.lower()
 
 def get_supabase_client():
     """Lazily load the Supabase client to prevent Vercel Serverless connection freezing."""
@@ -447,6 +456,36 @@ def normalize_review_json(obj: dict) -> dict:
 
 
 # ------------------ ROUTES ------------------
+@app.errorhandler(RequestEntityTooLarge)
+def handle_too_large(_err):
+    if wants_json_error():
+        return json_error(
+            "Uploaded file is too large.",
+            413,
+            details="Maximum allowed size is 16 MB.",
+        )
+    return "Uploaded file is too large. Maximum allowed size is 16 MB.", 413
+
+
+@app.errorhandler(HTTPException)
+def handle_http_exception(err):
+    if wants_json_error():
+        return json_error(err.description or "HTTP error.", err.code or 500)
+    return err
+
+
+@app.errorhandler(Exception)
+def handle_unexpected_exception(err):
+    traceback.print_exc()
+    if wants_json_error():
+        return json_error(
+            "Unhandled server error.",
+            500,
+            details=str(err),
+        )
+    return "Internal Server Error", 500
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
