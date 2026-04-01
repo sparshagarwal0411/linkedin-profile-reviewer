@@ -691,7 +691,7 @@ def review():
         # ----- Call Gemini -----
         try:
             gemini_api_key = os.environ.get("GEMINI_API_KEY")
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-8b:generateContent?key={gemini_api_key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_api_key}"
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {
@@ -714,7 +714,7 @@ def review():
             return json_error(
                 "Gemini API returned a non-200 status.",
                 500,
-                status=response.status_code,
+                api_status=response.status_code,
                 details=response.text,
             )
 
