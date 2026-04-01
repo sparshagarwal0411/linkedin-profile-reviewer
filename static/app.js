@@ -121,18 +121,35 @@ form.addEventListener("submit", async (e) => {
   formData.append("dream_companies", dreamCompaniesInput.value || "");
 
   try {
-    const res = await fetch("/review", {
-      method: "POST",
-      body: formData,
-    });
-
-    const rawText = await res.text();
+    let res = null;
+    let rawText = "";
     let data = null;
-    if (rawText) {
-      try {
-        data = JSON.parse(rawText);
-      } catch {
-        data = null;
+    const MAX_ATTEMPTS = 2;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      res = await fetch("/review", {
+        method: "POST",
+        body: formData,
+      });
+
+      rawText = await res.text();
+      data = null;
+      if (rawText) {
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          data = null;
+        }
+      }
+
+      const modelJsonParseError =
+        data &&
+        data.error &&
+        String(data.error).toLowerCase().includes("model output was not valid json");
+
+      // Auto-retry once for flaky model formatting responses.
+      if (res.ok || !modelJsonParseError || attempt === MAX_ATTEMPTS) {
+        break;
       }
     }
 
