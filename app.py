@@ -244,7 +244,7 @@ def is_likely_linkedin_profile(text: str) -> bool:
 
 
 # ------------------ PROMPT BUILDER ------------------
-_PROFILE_TEXT_LIMIT = 4500  # balance depth vs latency
+_PROFILE_TEXT_LIMIT = 3000  # keep latency lower to avoid worker timeouts
 
 
 def build_prompt(
@@ -557,14 +557,15 @@ def review():
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {
                     "responseMimeType": "application/json",
-                    "temperature": 0.1
+                    "temperature": 0.1,
+                    "maxOutputTokens": 1800,
                 }
             }
             response = requests.post(
                 url,
                 headers={"Content-Type": "application/json"},
                 json=payload,
-                timeout=60,
+                timeout=25,
             )
         except Exception as e:
             traceback.print_exc()

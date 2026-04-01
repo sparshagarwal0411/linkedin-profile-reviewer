@@ -141,8 +141,13 @@ form.addEventListener("submit", async (e) => {
         data && data.error
           ? `${data.error}${data.details ? ` – ${String(data.details).slice(0, 300)}` : ""}`
           : null;
+      const looksLikeHtmlError =
+        typeof rawText === "string" &&
+        /<html|<head|<body|internal server error/i.test(rawText);
       const fallback =
-        rawText && rawText.trim()
+        looksLikeHtmlError
+          ? `Server error (${res.status}). The backend likely timed out or crashed. Please retry once; if it persists, redeploy backend with updated timeout settings.`
+          : rawText && rawText.trim()
           ? `Server error (${res.status}). Response: ${rawText.trim().slice(0, 300)}`
           : `Server error (${res.status}).`;
       throw new Error(serverMsg || fallback);
