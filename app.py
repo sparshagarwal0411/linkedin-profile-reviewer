@@ -3,6 +3,7 @@ import os
 import json
 import traceback
 import re
+from datetime import datetime, timezone
 
 import fitz  # PyMuPDF
 import requests
@@ -26,6 +27,7 @@ app = Flask(__name__)
 
 # RAG-style benchmarks (local JSON, no vector DB) for comparison context
 _RAG_BENCHMARKS_PATH = os.path.join(os.path.dirname(__file__), "data", "rag_benchmarks.json")
+_LOCAL_LEADERBOARD_PATH = os.path.join(os.path.dirname(__file__), "data", "leaderboard_local.json")
 
 
 def _load_rag_benchmarks() -> dict:
@@ -80,6 +82,57 @@ def get_supabase_client():
     if url and key:
         return create_client(url, key)
     return None
+
+
+def _read_local_leaderboard() -> list[dict]:
+    try:
+        with open(_LOCAL_LEADERBOARD_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                return data
+    except OSError:
+        return []
+    except json.JSONDecodeError:
+        return []
+    return []
+
+
+def _write_local_leaderboard(rows: list[dict]) -> None:
+    os.makedirs(os.path.dirname(_LOCAL_LEADERBOARD_PATH), exist_ok=True)
+    with open(_LOCAL_LEADERBOARD_PATH, "w", encoding="utf-8") as f:
+        json.dump(rows, f, ensure_ascii=True, indent=2)
+
+
+def save_leaderboard_entry(name: str, score: int | float) -> None:
+    rows = _read_local_leaderboard()
+    rows.append(
+        {
+            "name": str(name).strip() or "Anonymous User",
+            "score": score,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    rows = sorted(
+        rows,
+        key=lambda x: x.get("score", 0),
+        reverse=True,
+    )[:100]
+    _write_local_leaderboard(rows)
+
+
+def get_top_leaderboard(limit: int = 10) -> list[dict]:
+    # Prefer Supabase if configured and reachable, otherwise fallback to local store.
+    try:
+        supabase = get_supabase_client()
+        if supabase:
+            response = supabase.table("leaderboard").select("*").order("score", desc=True).limit(limit).execute()
+            if isinstance(response.data, list):
+                return response.data
+    except Exception as e:
+        print("Supabase leaderboard read failed, using local fallback:", e)
+
+    local_rows = _read_local_leaderboard()
+    return sorted(local_rows, key=lambda x: x.get("score", 0), reverse=True)[:limit]
 
 def ensure_api_key():
     """Return an error response if the Gemini API key is missing."""
@@ -404,12 +457,9 @@ def leaderboard():
 
 @app.route("/api/leaderboard", methods=["GET"])
 def get_leaderboard():
-    supabase = get_supabase_client()
-    if not supabase:
-        return jsonify({"error": "Supabase not configured. Check Vercel environment variables."}), 500
     try:
-        response = supabase.table("leaderboard").select("*").order("score", desc=True).limit(10).execute()
-        return jsonify({"leaderboard": response.data})
+        rows = get_top_leaderboard(limit=10)
+        return jsonify({"leaderboard": rows, "source": "supabase_or_local"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -540,25 +590,24 @@ def review():
             if "followers" not in review_json or review_json.get("followers") is None:
                 review_json["followers"] = stats.get("followers")
 
-            # Save to leaderboard
-            try:
-                supabase = get_supabase_client()
-            except Exception as e:
-                supabase = None
-                print("Failed to initialize supabase client:", e)
-
-            if supabase and review_json.get("score"):
+            # Save to leaderboard (Supabase first; always fallback local)
+            if review_json.get("score") is not None:
                 name_to_insert = review_json.get("full_name")
                 if not name_to_insert or str(name_to_insert).strip() == "":
                     name_to_insert = "Anonymous User"
-
                 try:
-                    supabase.table("leaderboard").insert({
-                        "name": name_to_insert,
-                        "score": review_json["score"]
-                    }).execute()
+                    supabase = get_supabase_client()
+                    if supabase:
+                        supabase.table("leaderboard").insert({
+                            "name": name_to_insert,
+                            "score": review_json["score"]
+                        }).execute()
                 except Exception as e:
-                    print("Failed to save to leaderboard:", e)
+                    print("Failed to save to Supabase leaderboard, using local fallback:", e)
+                try:
+                    save_leaderboard_entry(name_to_insert, review_json["score"])
+                except Exception as e:
+                    print("Failed to save local leaderboard entry:", e)
 
         return jsonify({"review": review_json})
     except Exception as e:
