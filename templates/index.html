@@ -28,7 +28,7 @@
         <div class="header-left">
           <h1>AI LinkedIn Profile Reviewer...</h1>
           <p class="subtitle">
-            Upload your LinkedIn PDF export and get tailored suggestions for a target role.
+            Upload your LinkedIn PDF and get a scored review, recruiter-style feedback, rewrites, and a 90-day plan—tailored to your goals.
           </p>
         </div>
         <div class="header-right" style="display: flex; gap: 10px;">
@@ -51,7 +51,7 @@
         <section class="card upload-card">
           <h2 class="card-title">Upload your LinkedIn PDF</h2>
           <p class="card-subtitle">
-            Drop in your exported profile PDF and optionally tell us your target role. We’ll analyse it and give you an actionable score and tips.
+            Upload your PDF and add a few career signals so every section is tailored to your goals.
           </p>
 
           <form id="uploadForm" class="upload-form">
@@ -73,21 +73,47 @@
             </div>
 
             <div class="field">
-              <label for="target_role">Target job title (optional)</label>
+              <label for="target_role">Target role</label>
               <input
                 type="text"
                 id="target_role"
                 name="target_role"
-                placeholder="e.g. Data Scientist"
+                placeholder="e.g. Senior Product Manager, ML Engineer"
+                autocomplete="off"
               />
+            </div>
+
+            <div class="field">
+              <label for="experience_level">Experience level</label>
+              <select id="experience_level" name="experience_level">
+                <option value="">Prefer not to say / infer from profile</option>
+                <option value="Entry / early career">Entry / early career</option>
+                <option value="Mid-level">Mid-level</option>
+                <option value="Senior">Senior</option>
+                <option value="Lead / Staff / Principal">Lead / Staff / Principal</option>
+                <option value="Executive / C-level">Executive / C-level</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="dream_companies">Dream companies (optional)</label>
+              <input
+                type="text"
+                id="dream_companies"
+                name="dream_companies"
+                placeholder="Comma-separated, e.g. Stripe, Figma, local startups"
+                autocomplete="off"
+              />
+              <p class="field-help">Used to tune keywords and positioning—not shared.</p>
             </div>
 
             <button type="submit" class="primary-btn primary-btn-full">
               Analyse &amp; Score
             </button>
 
-            <div id="loading" class="loading" hidden>
-              Analysing your profile…
+            <div id="loading" class="loading loading-block" hidden aria-live="polite">
+              <span class="loading-dot" aria-hidden="true"></span>
+              <span id="loadingText" class="loading-text">Analyzing your profile…</span>
             </div>
 
             <div id="errorBox" class="error-box" hidden></div>
@@ -111,8 +137,8 @@
               in the uploader on the left.
             </li>
             <li>
-              Optionally, enter a <strong>target job title</strong> so feedback is
-              tailored to your goal.
+              Optionally add <strong>target role</strong>, <strong>experience level</strong>, and
+              <strong>dream companies</strong> so the AI can tailor scoring, rewrites, and benchmarks.
             </li>
             <li>Click <strong>“Analyse &amp; Score”</strong> and wait for your review.</li>
           </ol>
@@ -130,11 +156,13 @@
 
       <section id="result" class="result-grid" hidden>
         <section class="card score-card">
-          <h2>Overall score</h2>
+          <h2>Profile score</h2>
           <div id="scoreBox">
             <span id="score" class="score-value">—</span>
             <span class="score-total">/100</span>
           </div>
+          <div id="scoreBreakdown" class="score-breakdown" hidden></div>
+          <div id="hireProbBanner" class="hire-prob-banner" hidden></div>
           <div id="profileStats" class="profile-stats" hidden>
             <span class="profile-stat">
               <strong>Connections:</strong>
@@ -173,7 +201,10 @@
         </section>
 
         <section class="card suggestions-card">
-          <h2>Key suggestions you can copy</h2>
+          <h2>Your tailored playbook</h2>
+          <p class="card-subtitle suggestions-lead">
+            Recruiter view, benchmark gaps, copy-ready rewrites, content ideas, and a 30-60-90 day plan.
+          </p>
           <div id="suggestions"></div>
         </section>
       </section>

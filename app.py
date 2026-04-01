@@ -23,6 +23,47 @@ Simple LinkedIn profile reviewer:
 load_dotenv()
 
 app = Flask(__name__)
+
+# RAG-style benchmarks (local JSON, no vector DB) for comparison context
+_RAG_BENCHMARKS_PATH = os.path.join(os.path.dirname(__file__), "data", "rag_benchmarks.json")
+
+
+def _load_rag_benchmarks() -> dict:
+    try:
+        with open(_RAG_BENCHMARKS_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except OSError:
+        return {}
+
+
+def select_benchmark_context(target_role: str | None) -> str:
+    """
+    Pick the closest benchmark bundle from local JSON using simple keyword match (RAG-style retrieval).
+    """
+    data = _load_rag_benchmarks()
+    if not data:
+        return ""
+    role_lower = (target_role or "").lower()
+    chosen = None
+    chosen_key = "default"
+    for key, block in data.items():
+        if key == "default" or not isinstance(block, dict):
+            continue
+        matches = block.get("match") or []
+        if any(m.lower() in role_lower for m in matches):
+            chosen = block
+            chosen_key = key
+            break
+    if chosen is None:
+        chosen = data.get("default") or {}
+    lines = [
+        f"[Benchmark pack: {chosen_key}]",
+        chosen.get("summary", ""),
+        "Typical headline patterns: " + "; ".join(chosen.get("typical_headline_patterns") or []),
+        "High-signal keywords (examples): " + ", ".join(chosen.get("high_signal_keywords") or []),
+        "Common gaps vs strong profiles: " + "; ".join(chosen.get("common_skill_gaps") or []),
+    ]
+    return "\n".join(lines)
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB
 
 def get_supabase_client():
@@ -134,12 +175,27 @@ def is_likely_linkedin_profile(text: str) -> bool:
 
 
 # ------------------ PROMPT BUILDER ------------------
+_PROFILE_TEXT_LIMIT = 4500  # balance depth vs latency
+
+
 def build_prompt(
     extracted_text: str,
     target_role: str | None,
+    experience_level: str | None,
+    dream_companies: str | None,
     stats: dict | None,
 ) -> str:
     role_part = f"\nTarget job role / title: {target_role}" if target_role else ""
+    exp_part = (
+        f"\nExperience level (user-selected): {experience_level}"
+        if experience_level
+        else ""
+    )
+    companies_part = (
+        f"\nDream companies / employers of interest: {dream_companies}"
+        if dream_companies
+        else ""
+    )
 
     if stats:
         stats_part = (
@@ -150,40 +206,184 @@ def build_prompt(
     else:
         stats_part = "\nParsed network stats from the PDF were not available.\n"
 
+    benchmark_block = select_benchmark_context(target_role)
+    benchmark_section = (
+        "\n--- Reference: patterns from strong profiles (use for gap analysis, not as facts about this user) ---\n"
+        f"{benchmark_block}\n"
+        if benchmark_block
+        else ""
+    )
+
+    personalization = (
+        "Personalization: tailor EVERY section to the target role, experience level, and dream companies when provided. "
+        "If a field is empty, infer reasonably from the profile only.\n"
+    )
+
     return (
-        "You are a fast, expert LinkedIn coach.\n"
-        "Analyse this LinkedIn profile text. Be concise and write brief, punchy explanations.\n\n"
-        "SCORING RULES: 0-100 scale. Be conservative. 90+ is rare.\n"
-        f"PROFILE TEXT:\n{extracted_text[:2500]}\n"  # Truncate text to 2500 chars to speed up processing
-        f"{role_part}\n"
-        f"{stats_part}\n"
-        "Return ONLY a single valid JSON object, no backticks, no extra text.\n"
-        "JSON schema:\n"
+        "You are a fast, expert LinkedIn coach and recruiter.\n"
+        f"{personalization}"
+        "Analyse the LinkedIn profile text below. Be concise; each \"reason\" field must be one short sentence.\n\n"
+        "SCORING: overall score 0-100 plus four sub-scores 0-100: keywords, recruiter_visibility, impact, completeness. "
+        "Sub-scores should reflect the profile text, not wishful thinking. Be conservative; 90+ overall is rare.\n"
+        f"PROFILE TEXT:\n{extracted_text[:_PROFILE_TEXT_LIMIT]}\n"
+        f"{role_part}{exp_part}{companies_part}\n"
+        f"{stats_part}"
+        f"{benchmark_section}\n"
+        "Return ONLY one valid JSON object. No markdown fences, no commentary.\n"
+        "Schema (all keys required; use empty arrays/strings where unknown):\n"
         "{\n"
-        '  \"full_name\": string | null,   // inferred profile owner name, or null if unclear\n'
-        '  \"score\": number,            // 0-100 overall strength\n'
-        '  \"connections\": number | null, // parsed / estimated from profile\n'
-        '  \"followers\": number | null,   // parsed / estimated from profile\n'
+        '  \"full_name\": string | null,\n'
+        '  \"score\": number,\n'
+        '  \"score_breakdown\": {\n'
+        '    \"keywords\": number,\n'
+        '    \"recruiter_visibility\": number,\n'
+        '    \"impact\": number,\n'
+        '    \"completeness\": number,\n'
+        '    \"rationale\": string\n'
+        "  },\n"
+        '  \"connections\": number | null,\n'
+        '  \"followers\": number | null,\n'
+        '  \"recruiter_pov\": {\n'
+        '    \"strengths\": [ { \"point\": string, \"reason\": string } ],\n'
+        '    \"red_flags\": [ { \"point\": string, \"reason\": string } ],\n'
+        '    \"hire_probability_percent\": number,\n'
+        '    \"hire_probability_reason\": string\n'
+        "  },\n"
         '  \"headline\": {\n'
-        '    \"suggestion\": string,   // a single, ready-to-use LinkedIn headline\n'
-        '    \"explanation\": string   // why this headline works\n'
+        '    \"rewrite\": string,\n'
+        '    \"reason\": string,\n'
+        '    \"suggestion\": string,\n'
+        '    \"explanation\": string\n'
         "  },\n"
         '  \"about\": {\n'
-        '    \"suggestion\": string,   // a full About section the user can copy-paste\n'
-        '    \"explanation\": string   // how it improves clarity and positioning\n'
+        '    \"rewrite\": string,\n'
+        '    \"reason\": string,\n'
+        '    \"suggestion\": string,\n'
+        '    \"explanation\": string\n'
         "  },\n"
         '  \"experience\": [\n'
-        "    { \"role\": string, \"tips\": string } // concrete phrasing suggestions per role\n"
+        '    {\n'
+        '      \"role\": string,\n'
+        '      \"rewrite\": string,\n'
+        '      \"reason\": string,\n'
+        '      \"tips\": string\n'
+        "    }\n"
         "  ],\n"
-        '  \"skills\": {\n'
-        "    \"missing\": string | string[],\n"
-        "    \"notes\": string\n"
-        "  },\n"
+        '  \"skills\": { \"missing\": string | string[], \"notes\": string },\n'
         '  \"keywords\": string[],\n'
-        '  \"summary\": string           // 2-3 line summary of key advice in natural language\n'
+        '  \"benchmark_comparison\": {\n'
+        '    \"skill_gaps\": [ { \"gap\": string, \"reason\": string } ],\n'
+        '    \"missing_keywords\": [ { \"keyword\": string, \"reason\": string } ],\n'
+        '    \"summary\": string\n'
+        "  },\n"
+        '  \"linkedin_content\": {\n'
+        '    \"post_ideas\": [ { \"idea\": string, \"reason\": string } ],\n'
+        '    \"weekly_plan\": [ { \"day\": string, \"task\": string, \"reason\": string } ]\n'
+        "  },\n"
+        '  \"roadmap\": {\n'
+        '    \"days_30\": [ { \"action\": string, \"reason\": string } ],\n'
+        '    \"days_60\": [ { \"action\": string, \"reason\": string } ],\n'
+        '    \"days_90\": [ { \"action\": string, \"reason\": string } ]\n'
+        "  },\n"
+        '  \"summary\": string\n'
         "}\n"
-        "Make sure the JSON is strictly valid and parsable."
+        "Rules: headline.about.experience rewrites must be copy-ready (clean lines, no placeholders). "
+        "Mirror headline.rewrite into suggestion if identical; same for about and experience tips vs rewrite where helpful. "
+        "weekly_plan should have 5-7 items covering Mon-Sun style days. "
+        "Ensure strict JSON with double quotes."
     )
+
+
+def normalize_review_json(obj: dict) -> dict:
+    """Fill optional fields so the UI always has rewrite + legacy suggestion keys."""
+    if not isinstance(obj, dict):
+        return obj
+
+    for section in ("headline", "about"):
+        block = obj.get(section)
+        if isinstance(block, dict):
+            rw = block.get("rewrite")
+            sug = block.get("suggestion")
+            if not rw and sug:
+                block["rewrite"] = sug
+            if not sug and rw:
+                block["suggestion"] = rw
+            rs = block.get("reason")
+            ex = block.get("explanation")
+            if not rs and ex:
+                block["reason"] = ex
+            if not ex and rs:
+                block["explanation"] = rs
+
+    exp = obj.get("experience")
+    if isinstance(exp, list):
+        for item in exp:
+            if not isinstance(item, dict):
+                continue
+            if not item.get("rewrite") and item.get("tips"):
+                item["rewrite"] = item["tips"]
+            if not item.get("reason"):
+                item["reason"] = ""
+            if not item.get("tips") and item.get("rewrite"):
+                item["tips"] = item["rewrite"]
+
+    sb = obj.get("score_breakdown")
+    defaults_sb = {
+        "keywords": None,
+        "recruiter_visibility": None,
+        "impact": None,
+        "completeness": None,
+        "rationale": "",
+    }
+    if not isinstance(sb, dict):
+        obj["score_breakdown"] = defaults_sb
+    else:
+        for k, v in defaults_sb.items():
+            if k not in sb:
+                sb[k] = v
+
+    rp = obj.get("recruiter_pov")
+    rp_def = {
+        "strengths": [],
+        "red_flags": [],
+        "hire_probability_percent": None,
+        "hire_probability_reason": "",
+    }
+    if not isinstance(rp, dict):
+        obj["recruiter_pov"] = rp_def
+    else:
+        for k, v in rp_def.items():
+            if k not in rp:
+                rp[k] = v
+
+    bc = obj.get("benchmark_comparison")
+    bc_def = {"skill_gaps": [], "missing_keywords": [], "summary": ""}
+    if not isinstance(bc, dict):
+        obj["benchmark_comparison"] = bc_def
+    else:
+        for k, v in bc_def.items():
+            if k not in bc:
+                bc[k] = v
+
+    lc = obj.get("linkedin_content")
+    lc_def = {"post_ideas": [], "weekly_plan": []}
+    if not isinstance(lc, dict):
+        obj["linkedin_content"] = lc_def
+    else:
+        for k, v in lc_def.items():
+            if k not in lc:
+                lc[k] = v
+
+    rm = obj.get("roadmap")
+    rm_def = {"days_30": [], "days_60": [], "days_90": []}
+    if not isinstance(rm, dict):
+        obj["roadmap"] = rm_def
+    else:
+        for k, v in rm_def.items():
+            if k not in rm:
+                rm[k] = v
+
+    return obj
 
 
 # ------------------ ROUTES ------------------
@@ -216,6 +416,8 @@ def review():
 
     file = request.files.get("pdf")
     target_role = request.form.get("target_role", "").strip() or None
+    experience_level = request.form.get("experience_level", "").strip() or None
+    dream_companies = request.form.get("dream_companies", "").strip() or None
 
     if not file:
         return jsonify({"error": "No file uploaded."}), 400
@@ -252,7 +454,13 @@ def review():
 
     # ----- Parse simple stats and build prompt -----
     stats = parse_profile_stats(extracted_text)
-    prompt = build_prompt(extracted_text, target_role, stats)
+    prompt = build_prompt(
+        extracted_text,
+        target_role,
+        experience_level,
+        dream_companies,
+        stats,
+    )
 
     # ----- Call Gemini -----
     try:
@@ -324,6 +532,7 @@ def review():
             clean_content = "\n".join(lines).strip()
             
         review_json = json.loads(clean_content)
+        review_json = normalize_review_json(review_json)
     except Exception as e:
         return (
             jsonify(

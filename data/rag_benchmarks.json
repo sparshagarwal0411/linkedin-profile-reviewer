@@ -1,0 +1,120 @@
+{
+  "default": {
+    "summary": "Strong profiles lead with role + niche, quantify outcomes, use role-relevant keywords in headline and About, and show clear progression in Experience.",
+    "typical_headline_patterns": [
+      "Role | Specialty | Proof (metric or scope)",
+      "Title at Company — focus area + years or domain"
+    ],
+    "high_signal_keywords": [
+      "leadership",
+      "cross-functional",
+      "stakeholders",
+      "KPI",
+      "revenue",
+      "growth",
+      "strategy",
+      "delivery"
+    ],
+    "common_skill_gaps": [
+      "Metrics and outcomes in bullets",
+      "Keywords aligned to target role",
+      "Clear CTA in About",
+      "Recommendations or featured work"
+    ]
+  },
+  "tech_engineering": {
+    "match": ["engineer", "developer", "software", "devops", "sre", "backend", "frontend", "full stack", "data engineer", "ml", "ai"],
+    "summary": "Top engineering profiles emphasize stack, scale (users, QPS, latency), ownership, and systems thinking; certifications and OSS help.",
+    "typical_headline_patterns": [
+      "Senior X Engineer | Y (cloud, language) | Z (domain)",
+      "Staff Engineer — systems / platform / product area"
+    ],
+    "high_signal_keywords": [
+      "architecture",
+      "scalability",
+      "microservices",
+      "CI/CD",
+      "observability",
+      "AWS",
+      "Kubernetes",
+      "performance",
+      "reliability"
+    ],
+    "common_skill_gaps": [
+      "Quantified impact (latency, cost, uptime)",
+      "Design docs / RFC ownership",
+      "On-call or incident leadership",
+      "Security or compliance touchpoints"
+    ]
+  },
+  "data_analytics": {
+    "match": ["data scientist", "analyst", "analytics", "bi ", "business intelligence", "data analyst"],
+    "summary": "Strong data profiles show tools (SQL, Python, BI), business outcomes tied to models or dashboards, and experimentation.",
+    "typical_headline_patterns": [
+      "Data Scientist | ML / Analytics | Industry",
+      "Analytics — SQL, Python, stakeholder storytelling"
+    ],
+    "high_signal_keywords": [
+      "SQL",
+      "Python",
+      "experimentation",
+      "A/B test",
+      "forecasting",
+      "Tableau",
+      "Looker",
+      "causal inference"
+    ],
+    "common_skill_gaps": [
+      "Business impact of analyses",
+      "Experiment design",
+      "Data quality and governance",
+      "Stakeholder communication examples"
+    ]
+  },
+  "product_design": {
+    "match": ["product manager", "product owner", "pm ", "ux", "designer", "product design"],
+    "summary": "PM and design leaders highlight shipped work, user impact, and collaboration with eng and GTM.",
+    "typical_headline_patterns": [
+      "Product Manager | B2B / B2C | Growth or Platform",
+      "Senior PM — 0→1 or scale narrative"
+    ],
+    "high_signal_keywords": [
+      "roadmap",
+      "discovery",
+      "OKR",
+      "GTM",
+      "user research",
+      "prioritization",
+      "launch"
+    ],
+    "common_skill_gaps": [
+      "Clear product outcomes (adoption, revenue)",
+      "Tradeoff stories",
+      "Cross-functional leadership examples",
+      "Vision or strategy articulation"
+    ]
+  },
+  "sales_gtm": {
+    "match": ["sales", "account executive", "business development", "sdr", "bdr", "customer success", "account manager"],
+    "summary": "GTM profiles stress quota attainment, territory, segment, and customer logos where allowed.",
+    "typical_headline_patterns": [
+      "Enterprise AE | Vertical | Region",
+      "Revenue — new logo / expansion / retention"
+    ],
+    "high_signal_keywords": [
+      "quota",
+      "pipeline",
+      "ARR",
+      "enterprise",
+      "SaaS",
+      "negotiation",
+      "expansion"
+    ],
+    "common_skill_gaps": [
+      "Specific quota or % attainment",
+      "Deal size and cycle",
+      "Vertical or ICP clarity",
+      "Methodology (MEDDIC, etc.) where relevant"
+    ]
+  }
+}
