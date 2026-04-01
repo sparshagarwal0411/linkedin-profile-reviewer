@@ -704,7 +704,7 @@ def review():
                 url,
                 headers={"Content-Type": "application/json"},
                 json=payload,
-                timeout=25,
+                timeout=90,
             )
         except Exception as e:
             traceback.print_exc()
