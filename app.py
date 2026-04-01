@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for
 import os
 import json
 import traceback
@@ -407,8 +407,11 @@ def get_leaderboard():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/review", methods=["POST"])
+@app.route("/review", methods=["GET", "POST"])
 def review():
+    if request.method == "GET":
+        return redirect(url_for("index"))
+
     # Ensure API key exists first
     key_error = ensure_api_key()
     if key_error:
