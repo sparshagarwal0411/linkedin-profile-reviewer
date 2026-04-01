@@ -3,6 +3,7 @@ import os
 import json
 import traceback
 import re
+import ast
 from datetime import datetime, timezone
 from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 
@@ -455,6 +456,81 @@ def normalize_review_json(obj: dict) -> dict:
     return obj
 
 
+def _extract_first_json_object(text: str) -> str | None:
+    """Extract first balanced {...} block from arbitrary text."""
+    if not text:
+        return None
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
+
+
+def parse_model_json_content(content: str):
+    """
+    Parse model JSON robustly:
+    1) strict JSON
+    2) strict JSON on extracted object slice
+    3) Python-literal fallback for single-quoted dict output
+    """
+    clean_content = (content or "").strip()
+    if clean_content.startswith("```"):
+        lines = clean_content.split("\n")
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        clean_content = "\n".join(lines).strip()
+
+    # 1) Strict JSON direct
+    try:
+        return json.loads(clean_content)
+    except Exception:
+        pass
+
+    # 2) Strict JSON from extracted object
+    candidate = _extract_first_json_object(clean_content)
+    if candidate:
+        try:
+            return json.loads(candidate)
+        except Exception:
+            pass
+
+    # 3) Python literal fallback (handles single quotes, True/False/None)
+    for attempt in [clean_content, candidate]:
+        if not attempt:
+            continue
+        try:
+            parsed = ast.literal_eval(attempt)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            continue
+
+    raise ValueError("Could not parse model output as JSON-like object.")
+
+
 # ------------------ ROUTES ------------------
 @app.errorhandler(RequestEntityTooLarge)
 def handle_too_large(_err):
@@ -603,24 +679,14 @@ def review():
 
         # ----- Parse JSON from model -----
         try:
-            # Strip potential markdown code blocks
-            clean_content = content
-            if clean_content.startswith("```"):
-                lines = clean_content.split("\n")
-                if lines[0].startswith("```"):
-                    lines = lines[1:]
-                if lines and lines[-1].startswith("```"):
-                    lines = lines[:-1]
-                clean_content = "\n".join(lines).strip()
-
-            review_json = json.loads(clean_content)
+            review_json = parse_model_json_content(content)
             review_json = normalize_review_json(review_json)
         except Exception as e:
             return json_error(
                 "Model output was not valid JSON.",
                 500,
                 details=str(e),
-                raw=content,
+                raw=(content or "")[:1200],
             )
 
         # Ensure parsed stats are present even if the model omits them
