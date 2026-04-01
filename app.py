@@ -531,6 +531,69 @@ def parse_model_json_content(content: str):
     raise ValueError("Could not parse model output as JSON-like object.")
 
 
+def build_fallback_review_from_text(raw_content: str, stats: dict | None) -> dict:
+    """
+    Last-resort fallback when model output cannot be parsed.
+    Returns a schema-compatible minimal review so UI still works.
+    """
+    snippet = (raw_content or "").strip()
+    if len(snippet) > 600:
+        snippet = snippet[:600] + "..."
+    return {
+        "full_name": None,
+        "score": None,
+        "score_breakdown": {
+            "keywords": None,
+            "recruiter_visibility": None,
+            "impact": None,
+            "completeness": None,
+            "rationale": "Model response could not be parsed; showing fallback output.",
+        },
+        "connections": (stats or {}).get("connections"),
+        "followers": (stats or {}).get("followers"),
+        "recruiter_pov": {
+            "strengths": [],
+            "red_flags": [],
+            "hire_probability_percent": None,
+            "hire_probability_reason": "",
+        },
+        "headline": {
+            "rewrite": "",
+            "reason": "",
+            "suggestion": "",
+            "explanation": "",
+        },
+        "about": {
+            "rewrite": "",
+            "reason": "",
+            "suggestion": "",
+            "explanation": "",
+        },
+        "experience": [],
+        "skills": {"missing": "", "notes": ""},
+        "keywords": [],
+        "benchmark_comparison": {
+            "skill_gaps": [],
+            "missing_keywords": [],
+            "summary": "",
+        },
+        "linkedin_content": {
+            "post_ideas": [],
+            "weekly_plan": [],
+        },
+        "roadmap": {
+            "days_30": [],
+            "days_60": [],
+            "days_90": [],
+        },
+        "summary": (
+            "We could not fully parse the AI output this time. "
+            "Please retry once for a complete structured review."
+            + (f" Raw snippet: {snippet}" if snippet else "")
+        ),
+    }
+
+
 # ------------------ ROUTES ------------------
 @app.errorhandler(RequestEntityTooLarge)
 def handle_too_large(_err):
@@ -682,12 +745,9 @@ def review():
             review_json = parse_model_json_content(content)
             review_json = normalize_review_json(review_json)
         except Exception as e:
-            return json_error(
-                "Model output was not valid JSON.",
-                500,
-                details=str(e),
-                raw=(content or "")[:1200],
-            )
+            print("Model output parse failed; returning fallback review:", e)
+            review_json = build_fallback_review_from_text(content, stats)
+            review_json = normalize_review_json(review_json)
 
         # Ensure parsed stats are present even if the model omits them
         if isinstance(review_json, dict):
